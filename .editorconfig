@@ -1,0 +1,17 @@
+# Waypoint Queue – enforce contribution/code style
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.cs]
+indent_size = 4
+# Ensure no BOM (UTF-8 without BOM)
+charset = utf-8
+
+[*.{json,md}]
+indent_size = 2

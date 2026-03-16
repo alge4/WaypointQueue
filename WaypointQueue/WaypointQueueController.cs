@@ -1,3 +1,8 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using GalaSoft.MvvmLight.Messaging;
 using Game.Events;
 using Game.Messages;
@@ -5,11 +10,6 @@ using Game.State;
 using Model;
 using Model.Ops;
 using Model.Ops.Timetable;
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
 using Track;
 using UI.Common;
 using UI.EngineControls;
@@ -223,7 +223,7 @@ namespace WaypointQueue
             {
                 if (!p.Name.ToLowerInvariant().Contains("crew")) continue;
                 object value = null;
-                try { value = p.GetValue(train); } catch { }
+                try { value = p.GetValue(train); } catch { } // Reflection; ignore missing/inaccessible member
                 AddCrewIdsFromUnknownValue(value, crewIds);
             }
 
@@ -231,7 +231,7 @@ namespace WaypointQueue
             {
                 if (!f.Name.ToLowerInvariant().Contains("crew")) continue;
                 object value = null;
-                try { value = f.GetValue(train); } catch { }
+                try { value = f.GetValue(train); } catch { } // Reflection; ignore missing/inaccessible member
                 AddCrewIdsFromUnknownValue(value, crewIds);
             }
 
@@ -334,7 +334,7 @@ namespace WaypointQueue
                     foreach (FieldInfo field in shared.GetType().GetFields(flags))
                     {
                         object value = null;
-                        try { value = field.GetValue(shared); } catch { }
+                        try { value = field.GetValue(shared); } catch { } // Reflection; ignore on get
                         CollectCarsFromUnknownValue(value, discoveredCars, depth: 0);
                     }
 
@@ -342,7 +342,7 @@ namespace WaypointQueue
                     {
                         if (!prop.CanRead) continue;
                         object value = null;
-                        try { value = prop.GetValue(shared); } catch { }
+                        try { value = prop.GetValue(shared); } catch { } // Reflection; ignore on get
                         CollectCarsFromUnknownValue(value, discoveredCars, depth: 0);
                     }
                 }
@@ -403,7 +403,7 @@ namespace WaypointQueue
                 if (prop?.CanRead == true)
                 {
                     object inner = null;
-                    try { inner = prop.GetValue(value); } catch { }
+                    try { inner = prop.GetValue(value); } catch { } // Reflection; ignore on get
                     CollectCarsFromUnknownValue(inner, cars, depth + 1);
                 }
 
@@ -411,7 +411,7 @@ namespace WaypointQueue
                 if (field != null)
                 {
                     object inner = null;
-                    try { inner = field.GetValue(value); } catch { }
+                    try { inner = field.GetValue(value); } catch { } // Reflection; ignore on get
                     CollectCarsFromUnknownValue(inner, cars, depth + 1);
                 }
             }

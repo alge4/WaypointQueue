@@ -1,0 +1,45 @@
+---
+description: C# coding standards for Waypoint Queue
+globs: **/*.cs
+alwaysApply: false
+---
+
+# C# Standards
+
+Follow [Microsoft's C# coding conventions](https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/coding-style/coding-conventions) in general.
+
+**Lint**: Run Visual Studio **Code Cleanup** with these fixers enabled:
+- Format document
+- Remove unnecessary imports/usings
+- Sort imports/usings
+- Apply file header preferences
+
+## File encoding
+
+- Use UTF-8 **without BOM** for all C# files.
+- `using` directives must not start with a byte-order mark (no `﻿using`).
+
+## Error handling
+
+- Avoid empty `catch { }` blocks. Either log, rethrow, or handle meaningfully.
+- When intentionally swallowing exceptions (e.g. defensive reflection where failure is acceptable), add a one-line comment so reviewers know it is intentional.
+
+```csharp
+// ❌ BAD – silent swallow
+try { candidate = p.GetValue(value); } catch { }
+
+// ✅ GOOD – intentional swallow documented
+try { candidate = p.GetValue(value); } catch { } // Reflection; ignore missing/inaccessible member
+```
+
+## Harmony patches
+
+- Patch classes: `internal static`, `[HarmonyPatch(typeof(TargetType))]`.
+- Use `AccessTools` / `HarmonyLib` for reflection when possible.
+- Keep patch logic focused; move non-trivial logic into shared helpers or services.
+
+## Namespaces and usings
+
+- One namespace per file matching folder structure (e.g. `WaypointQueue.Patches` for `Patches/*.cs`).
+- Sort `using` directives: external (System, HarmonyLib, etc.) then project namespaces (WaypointQueue.*).
+- Remove unnecessary usings; use Code Cleanup "Sort usings" and "Remove unnecessary usings" before committing.

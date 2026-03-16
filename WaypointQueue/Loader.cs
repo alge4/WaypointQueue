@@ -1,8 +1,8 @@
+using System;
+using System.Reflection;
 using GalaSoft.MvvmLight.Messaging;
 using Game.Events;
 using HarmonyLib;
-using System;
-using System.Reflection;
 using UnityEngine;
 using UnityModManagerNet;
 using WaypointQueue.Services;

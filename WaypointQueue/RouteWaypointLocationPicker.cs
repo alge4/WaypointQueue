@@ -1,9 +1,9 @@
-using Helpers;
-using HarmonyLib;
-using Model;
 using System;
 using System.Collections;
 using System.Reflection;
+using Helpers;
+using HarmonyLib;
+using Model;
 using Track;
 using UI;
 using UI.Common;
@@ -125,7 +125,7 @@ namespace WaypointQueue
                 if (_hitLocationMethod != null)
                 {
                     object hit = null;
-                    try { hit = _hitLocationMethod.Invoke(picker, null); } catch { }
+                    try { hit = _hitLocationMethod.Invoke(picker, null); } catch { } // Reflection; ignore invoke failure
                     if (TryExtractLocationFromHit(hit, out location))
                     {
                         return true;
@@ -162,7 +162,7 @@ namespace WaypointQueue
                 if (!prop.CanRead) continue;
                 if (!IsLocationLike(prop.PropertyType)) continue;
                 object value = null;
-                try { value = prop.GetValue(hit); } catch { }
+                try { value = prop.GetValue(hit); } catch { } // Reflection; ignore missing/inaccessible member
                 if (TryUnboxLocation(value, out location)) return true;
             }
 
@@ -170,7 +170,7 @@ namespace WaypointQueue
             {
                 if (!IsLocationLike(field.FieldType)) continue;
                 object value = null;
-                try { value = field.GetValue(hit); } catch { }
+                try { value = field.GetValue(hit); } catch { } // Reflection; ignore missing/inaccessible member
                 if (TryUnboxLocation(value, out location)) return true;
             }
 

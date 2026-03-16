@@ -1,10 +1,10 @@
-using Game.State;
-using HarmonyLib;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using Game.State;
+using HarmonyLib;
 using WaypointQueue.UUM;
 
 namespace WaypointQueue.Patches
@@ -113,7 +113,7 @@ namespace WaypointQueue.Patches
                 if (!p.CanRead) continue;
                 string name = p.Name.ToLowerInvariant();
                 object raw = null;
-                try { raw = p.GetValue(message); } catch { }
+                try { raw = p.GetValue(message); } catch { } // Reflection; ignore on get
                 string value = CoerceToString(raw);
                 if (string.IsNullOrEmpty(value)) continue;
 
@@ -131,7 +131,7 @@ namespace WaypointQueue.Patches
             {
                 string name = f.Name.ToLowerInvariant();
                 object raw = null;
-                try { raw = f.GetValue(message); } catch { }
+                try { raw = f.GetValue(message); } catch { } // Reflection; ignore on get
                 string value = CoerceToString(raw);
                 if (string.IsNullOrEmpty(value)) continue;
 

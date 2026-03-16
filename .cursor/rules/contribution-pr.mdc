@@ -1,0 +1,30 @@
+---
+description: Pull request and contribution workflow (Waypoint Queue)
+alwaysApply: true
+---
+
+# Contribution and PR Rules
+
+When preparing or reviewing changes for Waypoint Queue:
+
+## Pull request requirements
+
+- **Related Issue**: Link to the issue the change relates to. For enhancements without an issue, follow [suggesting an enhancement](https://github.com/PrinceOfPluto/WaypointQueue/blob/main/CONTRIBUTING.md#suggesting-enhancements). For bug fixes without an issue, follow [reporting a bug](https://github.com/PrinceOfPluto/WaypointQueue/blob/main/CONTRIBUTING.md#reporting-bugs).
+- **Endorsement**: The change must be endorsed by a maintainer before submission.
+- **Template**: Fill out every section of the PR template. Incomplete PRs may be closed at maintainers' discretion.
+
+## Required PR sections
+
+1. **Description of the Change** – Explain the design so a reviewer unfamiliar with the code can understand what the code does.
+2. **Alternatives Considered** – What other approaches were considered and why this one was chosen.
+3. **Possible Drawbacks** – Side effects, user impact, backwards compatibility with saves.
+4. **Verification Process** – How you verified new and changed behavior and that no regressions were introduced (steps and results).
+
+When editing or suggesting PR text, ensure these sections are present and substantive.
+
+## Git commit messages
+
+- Use **present tense** ("Add feature" not "Added feature").
+- Use **imperative mood** ("Move cursor to..." not "Moves cursor to...").
+- Limit the **first line to 72 characters** or less.
+- Reference issues and pull requests liberally **after the first line**.

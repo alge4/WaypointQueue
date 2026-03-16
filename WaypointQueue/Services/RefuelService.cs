@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Helpers;
 using Model;
 using Model.Definition;
@@ -5,9 +8,6 @@ using Model.Definition.Data;
 using Model.Ops;
 using Model.Ops.Definition;
 using RollingStock;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Track;
 using UI.EngineControls;
 using UnityEngine;

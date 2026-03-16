@@ -1,9 +1,9 @@
-using Game.Messages;
-using HarmonyLib;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Game.Messages;
+using HarmonyLib;
 using WaypointQueue.UUM;
 
 namespace WaypointQueue.Patches
@@ -111,7 +111,7 @@ namespace WaypointQueue.Patches
                 if (p != null && p.CanRead)
                 {
                     object candidate = null;
-                    try { candidate = p.GetValue(value); } catch { }
+                    try { candidate = p.GetValue(value); } catch { } // Reflection; ignore missing/inaccessible member
                     string parsed = CoerceLeafString(candidate);
                     if (!string.IsNullOrWhiteSpace(parsed)) return parsed;
                 }
@@ -120,7 +120,7 @@ namespace WaypointQueue.Patches
                 if (f != null)
                 {
                     object candidate = null;
-                    try { candidate = f.GetValue(value); } catch { }
+                    try { candidate = f.GetValue(value); } catch { } // Reflection; ignore missing/inaccessible member
                     string parsed = CoerceLeafString(candidate);
                     if (!string.IsNullOrWhiteSpace(parsed)) return parsed;
                 }

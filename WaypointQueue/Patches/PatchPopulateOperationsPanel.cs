@@ -1,8 +1,8 @@
+using System.Collections.Generic;
+using System.Linq;
 using HarmonyLib;
 using Model;
 using Model.Definition;
-using System.Collections.Generic;
-using System.Linq;
 using UI.Builder;
 using UI.CarInspector;
 using WaypointQueue.UI;

@@ -1,14 +1,13 @@
-using Game;
-using Model.Ops.Timetable;
 using System.Collections.Generic;
 using System.Linq;
+using Game;
+using Model.Ops.Timetable;
 using UI;
 using UI.Builder;
 using UI.Common;
 using UnityEngine;
 using UnityEngine.UI;
 using WaypointQueue.UUM;
-
 
 namespace WaypointQueue.UI
 {
