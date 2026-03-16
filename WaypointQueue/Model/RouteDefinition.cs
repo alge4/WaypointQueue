@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace WaypointQueue
@@ -8,6 +8,7 @@ namespace WaypointQueue
     {
         public string Id { get; set; } = Guid.NewGuid().ToString();
         public string Name { get; set; } = "New Route";
+        public string TrainSymbol { get; set; }
         public List<ManagedWaypoint> Waypoints { get; set; } = new List<ManagedWaypoint>();
     }
 }

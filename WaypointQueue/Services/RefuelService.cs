@@ -1,4 +1,4 @@
-﻿using Helpers;
+using Helpers;
 using Model;
 using Model.Definition;
 using Model.Definition.Data;
@@ -176,7 +176,24 @@ namespace WaypointQueue.Services
 
         public void CheckNearbyFuelLoaders(ManagedWaypoint waypoint)
         {
-            List<string> validLoads = GetValidLoadsForLoco((BaseLocomotive)waypoint.Locomotive);
+            if (waypoint == null || waypoint.Location.Equals(default(Location)))
+            {
+                return;
+            }
+
+            // Reset prior refuel selection before recomputing from the current waypoint location.
+            waypoint.WillRefuel = false;
+            waypoint.RefuelLoadName = null;
+            waypoint.RefuelIndustryId = null;
+            waypoint.RefuelMaxCapacity = 0f;
+            waypoint.SerializableRefuelPoint = default;
+
+            BaseLocomotive contextLoco = waypoint.Locomotive as BaseLocomotive ?? TrainController.Shared?.SelectedLocomotive;
+            List<string> validLoads = GetValidLoadsForLoco(contextLoco);
+            if (validLoads == null || validLoads.Count == 0)
+            {
+                validLoads = ["water", "coal", "diesel-fuel"];
+            }
             CarLoadTargetLoader closestLoader = null;
             float shortestDistance = 0;
 

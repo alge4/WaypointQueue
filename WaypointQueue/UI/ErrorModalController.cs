@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using TMPro;
 using UI.Builder;
@@ -124,6 +124,33 @@ namespace WaypointQueue.UI
 
                 BuildErrorModalButtons(builder, dismiss);
 
+            }, width: 800);
+        }
+
+        public void ShowRouteCopyErrorModal(string routeName, string locomotiveIdent, string details)
+        {
+            Loader.LogDebug("Present route copy error modal");
+            ModalAlertController.Present((UIPanelBuilder builder, Action dismiss) =>
+            {
+                builder.Spacing = 16f;
+                builder.AddLabel("Route Waypoint Error", text =>
+                {
+                    text.fontSize = 22f;
+                    text.horizontalAlignment = HorizontalAlignmentOptions.Center;
+                });
+
+                BuildTextBody(builder, $"While applying route '{routeName}' to {locomotiveIdent}, at least one waypoint could not be copied.");
+                builder.AddLabelMarkup($"- <indent=20f>{details}").HorizontalTextAlignment(HorizontalAlignmentOptions.Left);
+
+                builder.Spacer(8f);
+                BuildSubheaderLabel(builder, "Suggested Actions");
+                builder.AddLabelMarkup("""
+- <indent=20f>Open the Routes panel and set a valid location for each draft waypoint (use "Set by click").
+- <indent=20f>Try applying the route again after all waypoints have valid locations.
+""").HorizontalTextAlignment(HorizontalAlignmentOptions.Left);
+
+                builder.Spacer(16f);
+                BuildErrorModalButtons(builder, dismiss);
             }, width: 800);
         }
 

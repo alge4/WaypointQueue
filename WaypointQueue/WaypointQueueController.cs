@@ -1,12 +1,15 @@
-﻿using GalaSoft.MvvmLight.Messaging;
+using GalaSoft.MvvmLight.Messaging;
 using Game.Events;
 using Game.Messages;
 using Game.State;
 using Model;
+using Model.Ops;
+using Model.Ops.Timetable;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Track;
 using UI.Common;
 using UI.EngineControls;
@@ -32,6 +35,9 @@ namespace WaypointQueue
         private RefuelService _refuelService;
         private ICarService _carService;
         private AutoEngineerService _autoEngineerService;
+        private readonly HashSet<string> _noCrewWarningKeys = [];
+        private readonly Dictionary<string, string> _knownCrewSymbolsByCrewId = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> _appliedRouteToQueueByLocoId = new(StringComparer.OrdinalIgnoreCase);
 
         private static WaypointQueueController _shared;
 
@@ -100,7 +106,9 @@ namespace WaypointQueue
 
             List<LocoWaypointState> listForRemoval = [];
 
-            foreach (LocoWaypointState entry in WaypointStateMap.Values)
+            // Route/symbol events can mutate WaypointStateMap during a tick; iterate a snapshot to avoid
+            // "Collection was modified" exceptions while preserving current tick behavior.
+            foreach (LocoWaypointState entry in WaypointStateMap.Values.ToList())
             {
                 List<ManagedWaypoint> waypointList = entry.Waypoints;
                 AutoEngineerOrdersHelper ordersHelper = _autoEngineerService.GetOrdersHelper(entry.Locomotive);
@@ -160,6 +168,16 @@ namespace WaypointQueue
                             continue;
                         }
                     }
+
+                    // Queue is depleted; allow symbol-selected routing to apply again.
+                    _appliedRouteToQueueByLocoId.Remove(entry.Locomotive.id);
+                    string depletedCrewId = entry.Locomotive?.trainCrewId;
+                    if (!string.IsNullOrWhiteSpace(depletedCrewId) &&
+                        _knownCrewSymbolsByCrewId.TryGetValue(depletedCrewId, out string currentSymbol) &&
+                        !string.IsNullOrWhiteSpace(currentSymbol))
+                    {
+                        TryAutoAssignWatchedRouteForCrew(depletedCrewId, currentSymbol);
+                    }
                     listForRemoval.Add(entry);
                 }
             }
@@ -168,6 +186,234 @@ namespace WaypointQueue
             foreach (var entry in listForRemoval)
             {
                 WaypointStateMap.Remove(entry.LocomotiveId);
+            }
+        }
+
+        private Dictionary<string, string> BuildCrewSymbolLookup()
+        {
+            Dictionary<string, string> lookup = new(_knownCrewSymbolsByCrewId, StringComparer.OrdinalIgnoreCase);
+            var timetable = TimetableController.Shared?.Current;
+            if (timetable?.Trains == null || timetable.Trains.Count == 0)
+            {
+                return lookup;
+            }
+
+            foreach (var train in timetable.Trains.Values)
+            {
+                if (train == null || string.IsNullOrWhiteSpace(train.Name)) continue;
+
+                foreach (string crewId in ExtractCrewIdsFromTrain(train))
+                {
+                    if (!string.IsNullOrWhiteSpace(crewId) && !lookup.ContainsKey(crewId))
+                    {
+                        lookup[crewId] = train.Name;
+                    }
+                }
+            }
+
+            return lookup;
+        }
+
+        private static List<string> ExtractCrewIdsFromTrain(Timetable.Train train)
+        {
+            HashSet<string> crewIds = [];
+            BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+
+            foreach (PropertyInfo p in train.GetType().GetProperties(flags))
+            {
+                if (!p.Name.ToLowerInvariant().Contains("crew")) continue;
+                object value = null;
+                try { value = p.GetValue(train); } catch { }
+                AddCrewIdsFromUnknownValue(value, crewIds);
+            }
+
+            foreach (FieldInfo f in train.GetType().GetFields(flags))
+            {
+                if (!f.Name.ToLowerInvariant().Contains("crew")) continue;
+                object value = null;
+                try { value = f.GetValue(train); } catch { }
+                AddCrewIdsFromUnknownValue(value, crewIds);
+            }
+
+            return [.. crewIds];
+        }
+
+        private static void AddCrewIdsFromUnknownValue(object value, HashSet<string> crewIds)
+        {
+            if (value == null) return;
+
+            if (value is string s)
+            {
+                if (!string.IsNullOrWhiteSpace(s)) crewIds.Add(s);
+                return;
+            }
+
+            if (value is IEnumerable enumerable)
+            {
+                foreach (object item in enumerable)
+                {
+                    AddCrewIdsFromUnknownValue(item, crewIds);
+                }
+                return;
+            }
+
+            BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            foreach (string name in new[] { "id", "Id", "crewId", "CrewId", "trainCrewId", "TrainCrewId" })
+            {
+                PropertyInfo prop = value.GetType().GetProperty(name, flags);
+                if (prop?.PropertyType == typeof(string))
+                {
+                    string v = prop.GetValue(value) as string;
+                    if (!string.IsNullOrWhiteSpace(v)) crewIds.Add(v);
+                }
+
+                FieldInfo field = value.GetType().GetField(name, flags);
+                if (field?.FieldType == typeof(string))
+                {
+                    string v = field.GetValue(value) as string;
+                    if (!string.IsNullOrWhiteSpace(v)) crewIds.Add(v);
+                }
+            }
+        }
+
+        private static IEnumerable<Car> EnumerateKnownLocomotives()
+        {
+            Dictionary<string, Car> locosById = [];
+
+            // Include locomotives that already have waypoint state
+            foreach (LocoWaypointState state in Shared.WaypointStateMap.Values)
+            {
+                if (state?.Locomotive is BaseLocomotive)
+                {
+                    locosById[state.Locomotive.id] = state.Locomotive;
+                }
+            }
+
+            // Include locomotives with route assignment
+            foreach (RouteAssignment assignment in RouteAssignmentRegistry.All())
+            {
+                if (assignment == null || string.IsNullOrEmpty(assignment.LocoId)) continue;
+                if (TrainController.Shared.TryGetCarForId(assignment.LocoId, out Car loco) && loco is BaseLocomotive)
+                {
+                    locosById[loco.id] = loco;
+                }
+            }
+
+            // Try to enumerate all car ids from OpsController lookup (fallback-friendly via reflection)
+            try
+            {
+                BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+                FieldInfo lookupField = OpsController.Shared.GetType().GetField("_carPositionLookup", flags);
+                if (lookupField?.GetValue(OpsController.Shared) is IDictionary dict)
+                {
+                    foreach (DictionaryEntry entry in dict)
+                    {
+                        if (entry.Key is string carId && TrainController.Shared.TryGetCarForId(carId, out Car car))
+                        {
+                            if (car is BaseLocomotive)
+                            {
+                                locosById[car.id] = car;
+                            }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Best effort only; we still have assigned/active locomotives.
+            }
+
+            // Broad fallback: reflect over TrainController internals for any Car collections.
+            try
+            {
+                BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+                HashSet<Car> discoveredCars = [];
+                object shared = TrainController.Shared;
+                if (shared != null)
+                {
+                    foreach (FieldInfo field in shared.GetType().GetFields(flags))
+                    {
+                        object value = null;
+                        try { value = field.GetValue(shared); } catch { }
+                        CollectCarsFromUnknownValue(value, discoveredCars, depth: 0);
+                    }
+
+                    foreach (PropertyInfo prop in shared.GetType().GetProperties(flags))
+                    {
+                        if (!prop.CanRead) continue;
+                        object value = null;
+                        try { value = prop.GetValue(shared); } catch { }
+                        CollectCarsFromUnknownValue(value, discoveredCars, depth: 0);
+                    }
+                }
+
+                foreach (Car car in discoveredCars)
+                {
+                    if (car is BaseLocomotive)
+                    {
+                        locosById[car.id] = car;
+                    }
+                }
+            }
+            catch
+            {
+                // Best effort fallback only.
+            }
+
+            return locosById.Values;
+        }
+
+        private static void CollectCarsFromUnknownValue(object value, HashSet<Car> cars, int depth)
+        {
+            if (value == null || depth > 3)
+            {
+                return;
+            }
+
+            if (value is Car car)
+            {
+                cars.Add(car);
+                return;
+            }
+
+            if (value is IDictionary dict)
+            {
+                foreach (DictionaryEntry entry in dict)
+                {
+                    CollectCarsFromUnknownValue(entry.Key, cars, depth + 1);
+                    CollectCarsFromUnknownValue(entry.Value, cars, depth + 1);
+                }
+                return;
+            }
+
+            if (value is IEnumerable enumerable && value is not string)
+            {
+                foreach (object item in enumerable)
+                {
+                    CollectCarsFromUnknownValue(item, cars, depth + 1);
+                }
+                return;
+            }
+
+            // Handle wrappers that expose a "Car" or "car" member.
+            BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            foreach (string name in new[] { "Car", "car", "Value", "value" })
+            {
+                PropertyInfo prop = value.GetType().GetProperty(name, flags);
+                if (prop?.CanRead == true)
+                {
+                    object inner = null;
+                    try { inner = prop.GetValue(value); } catch { }
+                    CollectCarsFromUnknownValue(inner, cars, depth + 1);
+                }
+
+                FieldInfo field = value.GetType().GetField(name, flags);
+                if (field != null)
+                {
+                    object inner = null;
+                    try { inner = field.GetValue(value); } catch { }
+                    CollectCarsFromUnknownValue(inner, cars, depth + 1);
+                }
             }
         }
 
@@ -283,6 +529,7 @@ namespace WaypointQueue
             var entry = GetOrAddLocoWaypointState(loco);
 
             int validWaypointsAdded = 0;
+            int failedWaypoints = 0;
             foreach (var rw in route.Waypoints)
             {
                 if (rw.TryCopyForRoute(out ManagedWaypoint copy, loco: loco))
@@ -292,11 +539,211 @@ namespace WaypointQueue
                 }
                 else
                 {
-                    Loader.LogDebug($"Failed to add waypoint {rw.Id} from route {route.Name} to {loco.Ident} queue");
+                    failedWaypoints++;
+                    string failureMessage = $"Waypoint '{(string.IsNullOrWhiteSpace(rw?.Name) ? rw?.Id : rw.Name)}' has no valid location. Set a location in Routes -> Set by click.";
+                    rw.Errors ??= [];
+                    rw.Errors.RemoveAll(e => e != null && e.ErrorType == "Route copy");
+                    rw.Errors.Add(new WaypointError("Route copy", failureMessage));
+                    Loader.LogError($"[Routes] {failureMessage} Route='{route.Name}' Loco='{loco.Ident}'");
                 }
             }
             Loader.Log($"Added {validWaypointsAdded} waypoints for {loco.Ident} from route {route.Name}");
+            if (failedWaypoints > 0)
+            {
+                string modalMessage = $"{failedWaypoints} waypoint(s) in route '{route.Name}' were skipped because location is missing or invalid.";
+                ErrorModalController.Shared?.ShowRouteCopyErrorModal(route.Name, loco.Ident.ToString(), modalMessage);
+            }
             OnWaypointWasAdded(loco.id);
+        }
+
+        public void AssignRouteToLoco(Car loco, RouteDefinition route, bool replaceQueue = true, bool warnIfNoCrew = true)
+        {
+            if (loco == null || route == null) return;
+
+            var (_, prevLoop) = RouteAssignmentRegistry.Get(loco.id);
+            RouteAssignmentRegistry.Set(loco.id, route.Id, prevLoop);
+            TryRegisterCrewSymbolForRoute(loco, route, warnIfNoCrew);
+            AddWaypointsFromRoute(loco, route, append: !replaceQueue);
+            MarkRouteAppliedToQueue(loco.id, route.Id);
+        }
+
+        public bool TryRegisterCrewSymbolForRoute(Car loco, RouteDefinition route, bool warnIfNoCrew = true)
+        {
+            if (loco == null || route == null) return false;
+
+            string crewId = loco.trainCrewId;
+            if (string.IsNullOrEmpty(crewId))
+            {
+                if (warnIfNoCrew && ShouldWarnNoCrew(loco.id, route.Id))
+                {
+                    Toast.Present($"Waypoint Queue: {loco.Ident} has no crew; route assigned without crew symbol.");
+                }
+                return false;
+            }
+
+            string symbol = string.IsNullOrWhiteSpace(route.TrainSymbol)
+                ? BuildCrewSymbolForRoute(route)
+                : route.TrainSymbol.Trim();
+            StateManager.ApplyLocal(new RequestSetTrainCrewTimetableSymbol(crewId, symbol));
+            NoteCrewSymbolChanged(crewId, symbol);
+            Loader.Log($"[RouteAssign] Set crew symbol '{symbol}' for {loco.Ident}");
+            return true;
+        }
+
+        public void NoteCrewSymbolChanged(string crewId, string symbol)
+        {
+            if (string.IsNullOrWhiteSpace(crewId))
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(symbol))
+            {
+                _knownCrewSymbolsByCrewId.Remove(crewId);
+            }
+            else
+            {
+                string normalizedSymbol = symbol.Trim();
+                if (_knownCrewSymbolsByCrewId.TryGetValue(crewId, out string previousSymbol) &&
+                    string.Equals(previousSymbol, normalizedSymbol, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                _knownCrewSymbolsByCrewId[crewId] = normalizedSymbol;
+                TryAutoAssignWatchedRouteForCrew(crewId, normalizedSymbol);
+            }
+        }
+
+        private void TryAutoAssignWatchedRouteForCrew(string crewId, string symbol)
+        {
+            if (string.IsNullOrWhiteSpace(crewId) || string.IsNullOrWhiteSpace(symbol))
+            {
+                return;
+            }
+
+            RouteDefinition matchedRoute = RouteRegistry.Routes
+                .FirstOrDefault(r => !string.IsNullOrWhiteSpace(r?.TrainSymbol) &&
+                    string.Equals(r.TrainSymbol.Trim(), symbol, StringComparison.OrdinalIgnoreCase));
+            if (matchedRoute == null)
+            {
+                Loader.LogDebug($"[RouteAssign] No route configured for symbol '{symbol}' (crewId='{crewId}').");
+                return;
+            }
+
+            List<Car> crewLocos = EnumerateKnownLocomotives()
+                .Where(l => l != null && string.Equals(l.trainCrewId, crewId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            Car selected = TrainController.Shared?.SelectedLocomotive;
+            if (selected != null &&
+                string.Equals(selected.trainCrewId, crewId, StringComparison.OrdinalIgnoreCase) &&
+                crewLocos.All(l => l.id != selected.id))
+            {
+                crewLocos.Add(selected);
+            }
+
+            if (crewLocos.Count == 0)
+            {
+                Loader.LogDebug($"[RouteAssign] No locomotive found for crewId='{crewId}' symbol='{symbol}'.");
+                return;
+            }
+
+            foreach (Car loco in crewLocos)
+            {
+                var (assignedRouteId, _) = RouteAssignmentRegistry.Get(loco.id);
+
+                if (string.Equals(assignedRouteId, matchedRoute.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (HasAppliedRouteToQueue(loco.id, matchedRoute.Id))
+                    {
+                        Loader.LogDebug($"[RouteAssign] Route '{matchedRoute.Name}' already applied for {loco.Ident}; no copy needed.");
+                        continue;
+                    }
+
+                    Loader.Log($"[RouteAssign] Loading symbol-selected route '{matchedRoute.Name}' to {loco.Ident} after symbol '{symbol}' update.");
+                    AddWaypointsFromRoute(loco, matchedRoute, append: false);
+                    MarkRouteAppliedToQueue(loco.id, matchedRoute.Id);
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(assignedRouteId))
+                {
+                    Loader.Log($"[RouteAssign] Symbol '{symbol}' selected route '{matchedRoute.Name}' for {loco.Ident}.");
+                }
+                else
+                {
+                    RouteDefinition previousRoute = RouteRegistry.GetById(assignedRouteId);
+                    string previousRouteName = previousRoute?.Name ?? assignedRouteId;
+                    Loader.Log($"[RouteAssign] Symbol '{symbol}' switching {loco.Ident} from route '{previousRouteName}' to '{matchedRoute.Name}'.");
+                }
+
+                _appliedRouteToQueueByLocoId.Remove(loco.id);
+                AssignRouteToLoco(loco, matchedRoute, replaceQueue: true, warnIfNoCrew: false);
+            }
+        }
+
+        private bool HasAppliedRouteToQueue(string locoId, string routeId)
+        {
+            if (string.IsNullOrWhiteSpace(locoId) || string.IsNullOrWhiteSpace(routeId))
+            {
+                return false;
+            }
+
+            return _appliedRouteToQueueByLocoId.TryGetValue(locoId, out string appliedRouteId) &&
+                string.Equals(appliedRouteId, routeId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void MarkRouteAppliedToQueue(string locoId, string routeId)
+        {
+            if (string.IsNullOrWhiteSpace(locoId) || string.IsNullOrWhiteSpace(routeId))
+            {
+                return;
+            }
+
+            _appliedRouteToQueueByLocoId[locoId] = routeId;
+        }
+
+        public string BuildCrewSymbolForRoute(RouteDefinition route)
+        {
+            string prefix = (Loader.Settings.RouteCrewSymbolPrefix ?? "WQ").Trim();
+            if (string.IsNullOrEmpty(prefix))
+            {
+                prefix = "WQ";
+            }
+
+            string routeId = (route?.Id ?? "").Replace("-", "");
+            if (routeId.Length > 6)
+            {
+                routeId = routeId.Substring(0, 6);
+            }
+            if (string.IsNullOrEmpty(routeId))
+            {
+                routeId = "route";
+            }
+
+            string safeName = new string((route?.Name ?? "route")
+                .Where(char.IsLetterOrDigit)
+                .Take(10)
+                .ToArray());
+            if (string.IsNullOrEmpty(safeName))
+            {
+                safeName = "route";
+            }
+
+            return $"{prefix}-{routeId}-{safeName}";
+        }
+
+        private bool ShouldWarnNoCrew(string locoId, string routeId)
+        {
+            string key = $"{locoId}:{routeId}";
+            if (_noCrewWarningKeys.Contains(key))
+            {
+                return false;
+            }
+
+            _noCrewWarningKeys.Add(key);
+            return true;
         }
 
         private void HandleLoopingRoutes()
@@ -359,6 +806,7 @@ namespace WaypointQueue
                 }
 
                 WaypointStateMap.Remove(locoId);
+                _appliedRouteToQueueByLocoId.Remove(locoId);
                 Loader.Log($"Removed waypoint state entry for {entry.Locomotive}");
                 _autoEngineerService.CancelActiveOrders(entry.Locomotive);
                 Loader.LogDebug($"Invoking LocoWaypointStateDidUpdate in ClearWaypointState");

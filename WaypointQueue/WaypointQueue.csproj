@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <Import Project="$(SolutionDir)Paths.user" Condition="Exists('$(SolutionDir)Paths.user')" />
@@ -20,6 +20,7 @@
     <RrManagedDir>$(RrInstallDir)\Railroader_Data\Managed</RrManagedDir>
     <ModDirectory>$(RrInstallDir)\Mods\$(AssemblyName)\</ModDirectory>
     <ModAssembly>$(ModDirectory)$(AssemblyName).dll</ModAssembly>
+    <RuntimeIdentifiers>win</RuntimeIdentifiers>
     <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -158,8 +159,11 @@
     <Compile Include="Patches\PatchAutoEngineerPlanner.cs" />
     <Compile Include="Patches\PatchAutoEngineerWaypointControls.cs" />
     <Compile Include="Patches\PatchPopulateOperationsPanel.cs" />
+    <Compile Include="Patches\PatchRequestSetTrainCrewTimetableSymbol.cs" />
+    <Compile Include="Patches\PatchStateManagerApplyLocal.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RouteAssignmentRegistry.cs" />
+    <Compile Include="RouteWaypointLocationPicker.cs" />
     <Compile Include="Model\RouteDefinition.cs" />
     <Compile Include="UI\RouteManagerWindow.cs" />
     <Compile Include="Model\LocoWaypointState.cs" />
@@ -193,7 +197,10 @@
   <Target Name="CopyInfo" AfterTargets="ExtractVersion">
     <Exec Command="copy &quot;$(SolutionDir)Info.json&quot; &quot;$(ModDirectory)Info.json&quot;" />
   </Target>
-  <Target Name="SetVersion" AfterTargets="CopyInfo">
+  <Target Name="CopyDefinition" AfterTargets="CopyInfo">
+    <Exec Command="copy &quot;$(SolutionDir)Definition.json&quot; &quot;$(ModDirectory)Definition.json&quot;" />
+  </Target>
+  <Target Name="SetVersion" AfterTargets="CopyDefinition">
     <Exec Command="powershell -ExecutionPolicy Bypass -File &quot;$(SolutionDir)UpdateVersion.ps1&quot; -FilePath &quot;$(ModDirectory)Info.json&quot; -FullVersion &quot;%(ModAssemblyIdentities.Version)&quot;" />
   </Target>
   <Target Name="PackageMod" AfterTargets="SetVersion" Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">

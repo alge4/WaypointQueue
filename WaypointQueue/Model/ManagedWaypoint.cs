@@ -1,4 +1,4 @@
-﻿using Game;
+using Game;
 using Model;
 using Model.Ops;
 using Newtonsoft.Json;
@@ -93,6 +93,9 @@ namespace WaypointQueue
 
         [JsonProperty]
         public string LocationString { get; private set; }
+
+        [JsonIgnore]
+        public bool HasLocationString => !string.IsNullOrWhiteSpace(LocationString);
 
         [JsonIgnore]
         public virtual Location Location { get; internal set; }
@@ -368,6 +371,12 @@ namespace WaypointQueue
 
         public bool TryResolveLocation(out Location loc)
         {
+            if (string.IsNullOrWhiteSpace(LocationString))
+            {
+                loc = default;
+                return false;
+            }
+
             try
             {
                 loc = Graph.Shared.ResolveLocationString(LocationString);

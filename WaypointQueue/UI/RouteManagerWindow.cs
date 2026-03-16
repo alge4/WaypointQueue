@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+using Game;
+using Model.Ops.Timetable;
+using System.Collections.Generic;
 using System.Linq;
 using UI;
 using UI.Builder;
@@ -130,9 +132,22 @@ namespace WaypointQueue.UI
                         RebuildWithScrolls();
                     }, placeholder: "Route name"));
 
+                    var (symbolLabels, symbolValues, symbolSelected) = BuildRouteTrainSymbolChoices(route.TrainSymbol);
+                    detail.AddField("Train Symbol", detail.AddDropdown(symbolLabels, symbolSelected, idx =>
+                    {
+                        route.TrainSymbol = symbolValues[idx];
+                    }));
+
                     detail.Spacer(8f);
                     detail.ButtonStrip(row =>
                     {
+                        row.AddButtonCompact("Add waypoint", () =>
+                        {
+                            route.Waypoints ??= new List<ManagedWaypoint>();
+                            route.Waypoints.Add(CreateDraftRouteWaypoint());
+                            RebuildWithScrolls();
+                        });
+
                         row.AddButtonCompact("Replace from Loco", () =>
                         {
                             SetFromSelectedLoco(route);
@@ -231,11 +246,6 @@ namespace WaypointQueue.UI
 
         private void BuildRouteWaypointSection(RouteDefinition route, ManagedWaypoint mw, int index, int totalWaypoints, UIPanelBuilder builder)
         {
-            if (!mw.IsValid())
-            {
-                return;
-            }
-
             WaypointWindow.Shared.BuildWaypointSection(
              mw,
              index,
@@ -257,10 +267,62 @@ namespace WaypointQueue.UI
              isRouteWindow: true);
         }
 
+        private static ManagedWaypoint CreateDraftRouteWaypoint()
+        {
+            ManagedWaypoint waypoint = new()
+            {
+                Version = 1,
+                ConnectAirOnCouple = Loader.Settings.ConnectAirByDefault,
+                ReleaseHandbrakesOnCouple = Loader.Settings.ReleaseHandbrakesByDefault,
+                ApplyHandbrakesOnUncouple = Loader.Settings.ApplyHandbrakesByDefault,
+                BleedAirOnUncouple = Loader.Settings.BleedAirByDefault,
+                WillLimitPassingSpeed = !Loader.Settings.DoNotLimitPassingSpeedDefault,
+                StatusLabel = "Draft (location required)"
+            };
+
+            if (Loader.Settings.EnableThenUncoupleByDefault)
+            {
+                waypoint.UncouplingMode = (ManagedWaypoint.UncoupleMode)Loader.Settings.DefaultUncouplingMode;
+            }
+
+            return waypoint;
+        }
+
         private void AssignToSelectedLoco(RouteDefinition route, bool append)
         {
             var loco = TrainController.Shared.SelectedLocomotive;
             WaypointQueueController.Shared.AddWaypointsFromRoute(loco, route, append);
+        }
+
+        private static (List<string> labels, List<string> values, int selected) BuildRouteTrainSymbolChoices(string current)
+        {
+            List<string> labels = ["Auto (WQ crew marker)"];
+            List<string> values = [null];
+
+            var timetable = TimetableController.Shared?.Current;
+            if (timetable?.Trains != null && timetable.Trains.Count > 0)
+            {
+                var sortedTrains = timetable.Trains
+                    .Values
+                    .Where(t => !string.IsNullOrEmpty(t.Name))
+                    .OrderBy(t => t.SortName)
+                    .ToList();
+
+                foreach (var train in sortedTrains)
+                {
+                    labels.Add(train.DisplayStringLong);
+                    values.Add(train.Name);
+                }
+            }
+
+            int selected = 0;
+            if (!string.IsNullOrEmpty(current))
+            {
+                int idx = values.IndexOf(current);
+                if (idx >= 0) selected = idx;
+            }
+
+            return (labels, values, selected);
         }
 
         private void SetFromSelectedLoco(RouteDefinition route)

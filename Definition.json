@@ -1,0 +1,16 @@
+{
+  "manifestVersion": 5,
+  "id": "WaypointQueue",
+  "name": "Waypoint Queue",
+  "version": "0.0.0",
+  "assemblies": [ "WaypointQueue" ],
+  "updateUrl": "https://raw.githubusercontent.com/PrinceOfPluto/WaypointQueue/refs/heads/main/repository.json",
+  "requires": [
+    {
+      "id": "railloader",
+      "notBefore": "1.7.2"
+    }
+  ],
+  "conflictsWith": [],
+  "mixintos": {}
+}

@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityModManagerNet;
 
 namespace WaypointQueue
@@ -37,6 +37,7 @@ namespace WaypointQueue
         [Header("UI")]
         [Draw("Use compact layout")] public bool UseCompactLayout = true;
         [Draw("Show time info in dropdown for timetable train symbol")] public bool ShowTimeInTrainSymbolDropdown = true;
+        [Draw("Route crew symbol prefix", Tooltip = "Prefix used when Waypoint Queue auto-assigns a crew symbol on route assignment.")] public string RouteCrewSymbolPrefix = "WQ";
         [Draw("Enable post-coupling cut by default")] public bool ShowPostCouplingCutByDefault = false;
         [Draw("Enable \"Then uncouple\" by default")] public bool EnableThenUncoupleByDefault = false;
 

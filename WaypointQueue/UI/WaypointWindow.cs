@@ -1,4 +1,4 @@
-﻿using Game;
+using Game;
 using HarmonyLib;
 using Model;
 using Model.Ops;
@@ -311,7 +311,7 @@ namespace WaypointQueue.UI
                     BuildErrorSection(waypoint, builder);
                 }
 
-                BuildDestinationField(waypoint, builder);
+                BuildDestinationField(waypoint, builder, onWaypointChange, isRouteWindow);
 
                 if (isRouteWindow || waypoint.Locomotive.TryGetTimetableTrainCrewId(out string trainCrewId))
                 {
@@ -600,11 +600,23 @@ namespace WaypointQueue.UI
             return builder;
         }
 
-        private UIPanelBuilder BuildDestinationField(ManagedWaypoint waypoint, UIPanelBuilder builder)
+        private UIPanelBuilder BuildDestinationField(ManagedWaypoint waypoint, UIPanelBuilder builder, Action<ManagedWaypoint> onWaypointChange, bool isRouteWindow)
         {
-            builder.AddField($"Destination", builder.HStack(delegate (UIPanelBuilder field)
+            builder.AddField("Destination", builder.HStack(delegate (UIPanelBuilder field)
             {
                 field.AddLabel(waypoint.AreaName?.Length > 0 ? waypoint.AreaName : "Unknown").Width(160f);
+
+                if (isRouteWindow)
+                {
+                    field.AddButtonCompact("Set by click", () =>
+                    {
+                        RouteWaypointLocationPicker.Shared?.StartPickingLocation(waypoint, onWaypointChange);
+                    });
+                    field.AddButtonCompact("Jump to", () =>
+                    {
+                        JumpCameraToWaypoint(waypoint);
+                    }).Disable(!waypoint.HasLocationString);
+                }
             }));
             return builder;
         }
@@ -621,7 +633,7 @@ namespace WaypointQueue.UI
                 onWaypointChange(waypoint);
             }));
 
-            AddLabelOnlyTooltip(trainSymbolField, "Train symbol", "Change to this train symbol once this waypoint becomes active.");
+            AddLabelOnlyTooltip(trainSymbolField, "Train symbol", "Change to this train symbol once this waypoint becomes active, then continue to remaining planned waypoints.");
             return builder;
         }
 

@@ -1,4 +1,4 @@
-﻿using HarmonyLib;
+using HarmonyLib;
 using Model;
 using Model.Definition;
 using System.Collections.Generic;
@@ -60,8 +60,16 @@ namespace WaypointQueue
                             }
 
 
-                            var (_, prevLoop) = RouteAssignmentRegistry.Get(carID);
-                            RouteAssignmentRegistry.Set(carID, newRouteId, prevLoop);
+                            if (!string.IsNullOrEmpty(newRouteId))
+                            {
+                                RouteDefinition route = RouteRegistry.GetById(newRouteId);
+                                WaypointQueueController.Shared?.AssignRouteToLoco(car, route, replaceQueue: true, warnIfNoCrew: true);
+                            }
+                            else
+                            {
+                                var (_, prevLoop) = RouteAssignmentRegistry.Get(carID);
+                                RouteAssignmentRegistry.Set(carID, null, prevLoop);
+                            }
 
 
                             section.Rebuild();

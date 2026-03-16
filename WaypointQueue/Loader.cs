@@ -1,4 +1,4 @@
-﻿using GalaSoft.MvvmLight.Messaging;
+using GalaSoft.MvvmLight.Messaging;
 using Game.Events;
 using HarmonyLib;
 using System;
@@ -57,6 +57,7 @@ namespace WaypointQueue.UUM
                 var waypointQueueGO = new GameObject("WaypointQueue");
                 Instance = waypointQueueGO.AddComponent<WaypointQueueController>();
                 waypointQueueGO.AddComponent<WaypointCarPicker>();
+                waypointQueueGO.AddComponent<RouteWaypointLocationPicker>();
                 waypointQueueGO.AddComponent<ErrorModalController>();
                 UnityEngine.Object.DontDestroyOnLoad(waypointQueueGO);
 
